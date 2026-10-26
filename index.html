@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Past Gesture Quest - Fase D English</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- MediaPipe Hands CDNs -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .mirror {
+            transform: scaleX(-1);
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.6); }
+            50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.9); }
+        }
+        .glow-box {
+            animation: pulseGlow 2s infinite;
+        }
+        /* Aspect ratio container rules for 9:16 portrait or 16:9 landscape */
+        .viewport-portrait {
+            max-width: 450px !important;
+            height: 90vh !important;
+            max-height: 850px !important;
+            border-radius: 2rem;
+            overflow: hidden;
+            border: 4px solid rgba(59, 130, 246, 0.4);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+        }
+        .viewport-landscape {
+            max-width: 1280px !important;
+            height: 85vh !important;
+            max-height: 720px !important;
+            border-radius: 2rem;
+            overflow: hidden;
+            border: 4px solid rgba(59, 130, 246, 0.4);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white min-h-screen w-screen flex flex-col justify-between items-center overflow-x-hidden p-0 md:p-4">
+
+    <!-- Top Viewport / Mode Toggle (Landscape vs Portrait) -->
+    <div class="absolute top-2 right-4 z-40 hidden md:flex items-center space-x-2 bg-slate-900/80 backdrop-blur border border-slate-700 px-3 py-1 rounded-full text-xs">
+        <span class="text-slate-400">Tampilan:</span>
+        <button onclick="setViewMode('portrait')" id="btnPortrait" class="px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-300 hover:bg-blue-600 transition">Portrait (9:16)</button>
+        <button onclick="setViewMode('landscape')" id="btnLandscape" class="px-2.5 py-1 rounded-lg font-semibold bg-blue-600 text-white transition">Landscape (16:9)</button>
+    </div>
+
+    <!-- Main Game Container Wrapper -->
+    <div id="gameContainerWrapper" class="relative w-full h-full flex flex-col justify-between items-center transition-all duration-300 viewport-landscape">
+
+        <!-- Video Feed Background & Canvas Layer -->
+        <div class="absolute inset-0 z-0 overflow-hidden bg-slate-900">
+            <video id="webcam" class="absolute inset-0 w-full h-full object-cover mirror opacity-35" autoplay playsinline></video>
+            <canvas id="gameCanvas" class="absolute inset-0 w-full h-full z-10"></canvas>
+        </div>
+
+        <!-- Admin Access Floating Button -->
+        <button onclick="openAdminLoginModal()" class="absolute top-4 left-4 z-30 bg-slate-900/80 hover:bg-slate-800 border border-slate-700 p-2.5 rounded-2xl text-slate-300 hover:text-white shadow-lg transition flex items-center space-x-2 text-xs font-semibold hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065Z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0Z" />
+            </svg>
+            <span class="hidden sm:inline">Admin Panel</span>
+        </button>
+
+        <!-- Mode & Guide Modal (Home Menu) -->
+        <div id="guideModal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl relative flex flex-col items-center text-center my-auto">
+                
+                <!-- Admin & Settings Header inside Modal -->
+                <div class="w-full flex justify-between items-center mb-3">
+                    <button onclick="openAdminLoginModal()" class="bg-slate-800/90 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-xl text-slate-300 hover:text-white shadow transition flex items-center space-x-2 text-xs font-semibold">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0Z" />
+                        </svg>
+                        <span>Admin Panel</span>
+                    </button>
+                    <div class="text-[11px] text-slate-400 font-medium tracking-wide">
+                        Pengembang: Ernis Novitasari, S.Pd
+                    </div>
+                </div>
+
+                <div class="inline-block bg-blue-600/20 text-blue-400 font-semibold px-4 py-1.5 rounded-full text-sm mb-3 border border-blue-500/30">
+                    🎮 Interactive Hand Tracking Game
+                </div>
+                <h1 id="homeSubjectTitle" class="text-2xl md:text-3xl font-extrabold text-white mb-1">Simple Past Quest</h1>
+                <p id="homeSubjectDesc" class="text-slate-400 text-xs md:text-sm mb-4">Mata Pelajaran: English | Fase D (Simple Past Tense)</p>
+
+                <!-- Team Mode Selection -->
+                <div class="w-full bg-slate-800/80 border border-slate-700 p-4 rounded-2xl mb-5 text-left">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">Pilih Mode Bermain:</label>
+                    <div id="teamModeButtons" class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        <button onclick="setTeamMode(1)" id="modeBtn1" class="py-2.5 px-2 rounded-xl text-xs font-bold bg-blue-600 text-white transition shadow border border-blue-500">Single</button>
+                        <button onclick="setTeamMode(2)" id="modeBtn2" class="py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700">2 Teams</button>
+                        <button onclick="setTeamMode(3)" id="modeBtn3" class="py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700">3 Teams</button>
+                        <button onclick="setTeamMode(4)" id="modeBtn4" class="py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700">4 Teams</button>
+                        <button onclick="setTeamMode(5)" id="modeBtn5" class="py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700">5 Teams</button>
+                    </div>
+                </div>
+
+                <!-- Gesture Guide Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 w-full mb-6 text-left">
+                    <div class="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-xl flex items-start space-x-3">
+                        <div class="bg-blue-600 text-white font-bold w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm">1</div>
+                        <div>
+                            <h3 class="font-bold text-white text-xs">Membidik (Arahkan)</h3>
+                            <p class="text-slate-300 text-[11px] mt-0.5">Luruskan jari telunjuk untuk mengarahkan crosshair ke jawaban.</p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-xl flex items-start space-x-3">
+                        <div class="bg-emerald-600 text-white font-bold w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-sm">2</div>
+                        <div>
+                            <h3 class="font-bold text-white text-xs">Menembak (Dor!)</h3>
+                            <p class="text-slate-300 text-[11px] mt-0.5">Turunkan ibu jari ke bawah atau kepalkan tangan untuk menembak!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="startBtn" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/40 transition transform active:scale-95 flex items-center justify-center space-x-2 text-base">
+                    <span>Mulai Petualangan Sekarang</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Top HUD Header -->
+        <header class="relative z-20 w-full p-3 md:p-4 flex justify-between items-center bg-gradient-to-b from-slate-950/90 to-transparent">
+            <!-- Turn / Team indicator -->
+            <div id="turnIndicatorBox" class="flex items-center space-x-3 bg-slate-900/90 backdrop-blur border border-slate-700 px-4 py-2 rounded-2xl shadow-lg">
+                <div>
+                    <span id="activeTeamLabel" class="text-xs text-blue-400 uppercase font-bold block">Giliran: Player / Team 1</span>
+                    <span id="scoreDisplay" class="text-lg font-extrabold text-emerald-400">Skor: 0</span>
+                </div>
+            </div>
+
+            <!-- Timer Bar -->
+            <div class="flex items-center space-x-2 bg-slate-900/90 backdrop-blur border border-slate-700 px-4 py-2 rounded-2xl shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span id="timerDisplay" class="text-base font-bold text-amber-400">25s</span>
+            </div>
+
+            <!-- Lives / Hearts -->
+            <div class="flex items-center space-x-2 bg-slate-900/90 backdrop-blur border border-slate-700 px-4 py-2 rounded-2xl shadow-lg">
+                <div id="livesContainer" class="flex space-x-1">
+                    <span class="text-rose-500 text-lg">❤️</span>
+                    <span class="text-rose-500 text-lg">❤️</span>
+                    <span class="text-rose-500 text-lg">❤️</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Center Game Stage (Question & Target Area) -->
+        <main class="relative z-20 w-full max-w-3xl mx-auto px-4 flex flex-col items-center justify-center my-auto text-center">
+            <div id="questionCard" class="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-3xl p-5 md:p-6 shadow-2xl w-full mb-6 transform transition duration-300">
+                <span id="badgeSubject" class="text-xs font-semibold uppercase tracking-wider text-blue-400 bg-blue-950/60 px-3 py-1 rounded-full border border-blue-800/50 mb-2 inline-block">English • Fase D</span>
+                <h2 id="questionText" class="text-lg md:text-2xl font-bold text-white leading-snug">
+                    Memuat soal...
+                </h2>
+            </div>
+        </main>
+
+        <!-- Bottom Gesture Status Footer & Developer Credit -->
+        <footer class="relative z-20 w-full p-3 flex flex-col justify-center items-center bg-gradient-to-t from-slate-950/95 to-transparent space-y-1.5">
+            <div id="gestureStatus" class="bg-slate-900/90 border border-slate-700 px-5 py-2 rounded-full flex items-center space-x-2 shadow-xl">
+                <span id="gestureDot" class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                <span id="gestureText" class="text-xs font-semibold text-slate-300">Mencari tangan... Silakan tunjuk kamera</span>
+            </div>
+        </footer>
+
+        <!-- Game Over Modal -->
+        <div id="gameOverModal" class="hidden fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-lg flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 md:p-8 shadow-2xl text-center flex flex-col items-center">
+                <div id="gameOverEmoji" class="text-5xl mb-3">🏆</div>
+                <h2 id="gameOverTitle" class="text-2xl md:text-3xl font-extrabold text-white mb-2">Permainan Selesai!</h2>
+                <p id="gameOverSubtitle" class="text-slate-400 text-xs md:text-sm mb-5">Hebat! Semua giliran telah diselesaikan.</p>
+                
+                <div id="scoreBoardResults" class="bg-slate-800/80 border border-slate-700 rounded-2xl p-4 w-full mb-5 text-left max-h-48 overflow-y-auto space-y-2">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <button id="restartBtn" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/40 transition transform active:scale-95 flex items-center justify-center space-x-2">
+                    <span>Main Lagi</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Admin Login Password Modal -->
+        <div id="adminLoginModal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center">
+                <div class="bg-amber-600/20 text-amber-400 p-3 rounded-2xl inline-block mb-3 border border-amber-500/30">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-1">Admin Authentication</h3>
+                <p class="text-slate-400 text-xs mb-4">Masukkan password pengaman untuk mengakses panel pengaturan.</p>
+                
+                <input type="password" id="adminPasswordInput" placeholder="Masukkan password..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white text-center text-lg mb-4 focus:outline-none focus:border-blue-500">
+                
+                <div class="flex space-x-2">
+                    <button onclick="closeAdminLoginModal()" class="w-1/2 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition">Batal</button>
+                    <button onclick="verifyAdminPassword()" class="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition">Masuk</button>
+                </div>
+                <p id="adminLoginError" class="text-rose-500 text-xs mt-3 hidden">Password salah!</p>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard Modal -->
+        <div id="adminModal" class="hidden fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 md:p-8 shadow-2xl relative flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+                    <h2 class="text-xl font-bold text-white flex items-center space-x-2">
+                        <span>⚙️ Admin Panel - Pengaturan Soal & Materi</span>
+                    </h2>
+                    <button onclick="closeAdminModal()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+                </div>
+
+                <div class="overflow-y-auto space-y-4 pr-2 flex-grow text-left">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">Mata Pelajaran:</label>
+                            <input type="text" id="adminSubject" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">Materi / Topik:</label>
+                            <input type="text" id="adminTopic" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Daftar Soal & Pilihan Jawaban</label>
+                            <button onclick="addAdminQuestionItem()" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold">+ Tambah Soal</button>
+                        </div>
+                        <div id="adminQuestionsContainer" class="space-y-3">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 mt-4 border-t border-slate-800 flex justify-end space-x-3">
+                    <button onclick="closeAdminModal()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm">Batal</button>
+                    <button onclick="saveAdminSettings()" class="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-600/30">Simpan & Mulai Ulang</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- DEFAULT QUESTION BANK (15 Questions for Fase D Simple Past Tense) ---
+        let configSubject = "English";
+        let configTopic = "Fase D (Simple Past Tense)";
+        let questions = [
+            { question: "What is the past form of the verb 'go'?", options: ["Goed", "Went", "Gone", "Going"], correct: 1 },
+            { question: "She ... to the cinema with her friends yesterday.", options: ["go", "goes", "went", "gone"], correct: 2 },
+            { question: "Choose the correct negative sentence in Simple Past:", options: ["He didn't ate breakfast.", "He didn't eat breakfast.", "He not eat breakfast.", "He doesn't ate breakfast."], correct: 1 },
+            { question: "They ... football in the rain last Sunday.", options: ["play", "plays", "playing", "played"], correct: 3 },
+            { question: "What is the past form of 'eat'?", options: ["Ate", "Eated", "Eaten", "Eating"], correct: 0 },
+            { question: "... you watch the football match last night?", options: ["Do", "Did", "Are", "Were"], correct: 1 },
+            { question: "I ... a letter to my grandmother last week.", options: ["write", "writed", "wrote", "written"], correct: 2 },
+            { question: "The children ... very happy after winning the competition.", options: ["was", "were", "is", "are"], correct: 1 },
+            { question: "What is the past form of 'buy'?", options: ["Buyed", "Bought", "Baught", "Buying"], correct: 1 },
+            { question: "He ... English grammar very well when he was in junior high school.", options: ["study", "studies", "studied", "studying"], correct: 2 },
+            { question: "We ... not at home when you called us.", options: ["was", "were", "did", "are"], correct: 1 },
+            { question: "What did you ... for breakfast this morning?", options: ["eat", "ate", "eaten", "eating"], correct: 0 },
+            { question: "My mother ... a delicious cake for my birthday last Saturday.", options: ["make", "makes", "making", "made"], correct: 3 },
+            { question: "Choose the correct interrogative sentence:", options: ["Did she went to Bali?", "Did she go to Bali?", "Do she went to Bali?", "Was she go to Bali?"], correct: 1 },
+            { question: "They ... sleeping when the phone rang.", options: ["was", "were", "did", "are"], correct: 1 }
+        ];
+
+        // --- GAME STATE ---
+        let selectedTeamMode = 1; // 1 to 5
+        let currentTeamIndex = 0; // 0-indexed team turn
+        let teamScores = [0, 0, 0, 0, 0];
+        let teamLives = [3, 3, 3, 3, 3];
+        
+        // Queue management per team or rotating pool without repetition
+        let teamQuestionQueues = []; // Array of arrays containing question indices assigned to each team
+        let teamCurrentQueueIndices = [0, 0, 0, 0, 0];
+
+        let currentQuestionIndex = 0; // index in current team queue
+        let activeQuestionObj = null;
+        let timeLeft = 25;
+        let timerInterval = null;
+        let gameActive = false;
+
+        let targetBoxes = [];
+        let pointerX = window.innerWidth / 2;
+        let pointerY = window.innerHeight / 2;
+        let targetPointerX = window.innerWidth / 2;
+        let targetPointerY = window.innerHeight / 2;
+        const lerpFactor = 0.2;
+
+        let isReadyState = false;
+        let isShootingTriggered = false;
+        let lastShotTime = 0;
+        const shootCooldown = 800;
+
+        // DOM Elements
+        const webcamElement = document.getElementById('webcam');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const guideModal = document.getElementById('guideModal');
+        const startBtn = document.getElementById('startBtn');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const restartBtn = document.getElementById('restartBtn');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const activeTeamLabel = document.getElementById('activeTeamLabel');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const livesContainer = document.getElementById('livesContainer');
+        const questionText = document.getElementById('questionText');
+        const badgeSubject = document.getElementById('badgeSubject');
+        const homeSubjectTitle = document.getElementById('homeSubjectTitle');
+        const homeSubjectDesc = document.getElementById('homeSubjectDesc');
+        const gestureDot = document.getElementById('gestureDot');
+        const gestureText = document.getElementById('gestureText');
+        const gameContainerWrapper = document.getElementById('gameContainerWrapper');
+
+        // Viewport mode toggle
+        function setViewMode(mode) {
+            const btnP = document.getElementById('btnPortrait');
+            const btnL = document.getElementById('btnLandscape');
+            if (mode === 'portrait') {
+                gameContainerWrapper.className = "relative w-full h-full flex flex-col justify-between items-center transition-all duration-300 viewport-portrait";
+                btnP.className = "px-2.5 py-1 rounded-lg font-semibold bg-blue-600 text-white transition";
+                btnL.className = "px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-300 hover:bg-blue-600 transition";
+            } else {
+                gameContainerWrapper.className = "relative w-full h-full flex flex-col justify-between items-center transition-all duration-300 viewport-landscape";
+                btnL.className = "px-2.5 py-1 rounded-lg font-semibold bg-blue-600 text-white transition";
+                btnP.className = "px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-300 hover:bg-blue-600 transition";
+            }
+            resizeCanvas();
+        }
+
+        // Team Mode Selection
+        function setTeamMode(num) {
+            selectedTeamMode = num;
+            for (let i = 1; i <= 5; i++) {
+                const btn = document.getElementById(`modeBtn${i}`);
+                if (i === num) {
+                    btn.className = "py-2.5 px-2 rounded-xl text-xs font-bold bg-blue-600 text-white transition shadow border border-blue-500";
+                } else {
+                    btn.className = "py-2.5 px-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700";
+                }
+            }
+        }
+
+        // Audio Context Synthesizer
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'shoot') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'correct') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.setValueAtTime(660, now + 0.1);
+                    osc.frequency.setValueAtTime(880, now + 0.2);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } else if (type === 'wrong') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.setValueAtTime(150, now + 0.15);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                }
+            } catch (e) {
+                console.error("Audio error:", e);
+            }
+        }
+
+        function resizeCanvas() {
+            canvas.width = gameContainerWrapper.clientWidth;
+            canvas.height = gameContainerWrapper.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- MEDIAPIPE HANDS SETUP ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(onHandResults);
+
+        const camera = new Camera(webcamElement, {
+            onFrame: async () => {
+                await hands.send({ image: webcamElement });
+            },
+            width: 1280,
+            height: 720
+        });
+
+        function onHandResults(results) {
+            if (!gameActive) return;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const indexTip = landmarks[8];
+                targetPointerX = (1 - indexTip.x) * canvas.width;
+                targetPointerY = indexTip.y * canvas.height;
+
+                const thumbTip = landmarks[4];
+                const indexMcp = landmarks[5];
+                const thumbDownDistance = thumbTip.y - indexMcp.y;
+
+                if (thumbDownDistance > 0.02) {
+                    isReadyState = false;
+                    gestureDot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping";
+                    gestureText.innerText = "TEMBAK! (DOR!)";
+                    
+                    const now = Date.now();
+                    if (!isShootingTriggered && (now - lastShotTime > shootCooldown)) {
+                        triggerShoot();
+                        lastShotTime = now;
+                    }
+                    isShootingTriggered = true;
+                } else {
+                    isReadyState = true;
+                    isShootingTriggered = false;
+                    gestureDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+                    gestureText.innerText = "SIAP - Bidik & Turunkan Ibu Jari untuk Menembak";
+                }
+            } else {
+                gestureDot.className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping";
+                gestureText.innerText = "Tangan tidak terdeteksi. Silakan tunjuk kamera.";
+            }
+        }
+
+        // --- GAMEPLAY FLOW & TEAM DISTRIBUTION ---
+        function startGame() {
+            initAudio();
+            guideModal.classList.add('hidden');
+            gameOverModal.classList.add('hidden');
+
+            // Reset game state
+            currentTeamIndex = 0;
+            teamScores = new Array(selectedTeamMode).fill(0);
+            teamLives = new Array(selectedTeamMode).fill(3);
+            teamCurrentQueueIndices = new Array(selectedTeamMode).fill(0);
+
+            // Distribute questions without duplication across teams in round-robin fashion
+            teamQuestionQueues = Array.from({ length: selectedTeamMode }, () => []);
+            questions.forEach((qObj, idx) => {
+                const targetTeam = idx % selectedTeamMode;
+                teamQuestionQueues[targetTeam].push(idx);
+            });
+
+            gameActive = true;
+            loadCurrentTurnQuestion();
+            camera.start();
+        }
+
+        function loadCurrentTurnQuestion() {
+            // Check if current team has questions left
+            const queue = teamQuestionQueues[currentTeamIndex];
+            const qIdxInQueue = teamCurrentQueueIndices[currentTeamIndex];
+
+            if (qIdxInQueue >= queue.length) {
+                // If this team has finished all their questions, check if any team still has questions
+                let hasMore = false;
+                for (let i = 0; i < selectedTeamMode; i++) {
+                    if (teamCurrentQueueIndices[i] < teamQuestionQueues[i].length && teamLives[i] > 0) {
+                        hasMore = true;
+                        break;
+                    }
+                }
+                if (!hasMore) {
+                    endGame();
+                    return;
+                } else {
+                    // Skip to next team that still has questions
+                    advanceToNextTeam();
+                    loadCurrentTurnQuestion();
+                    return;
+                }
+            }
+
+            // Check if active team is eliminated (lives <= 0)
+            if (teamLives[currentTeamIndex] <= 0) {
+                advanceToNextTeam();
+                loadCurrentTurnQuestion();
+                return;
+            }
+
+            const globalQIdx = queue[qIdxInQueue];
+            activeQuestionObj = questions[globalQIdx];
+
+            // Update UI elements
+            badgeSubject.innerText = `${configSubject} • ${configTopic}`;
+            homeSubjectTitle.innerText = configSubject + " Quest";
+            homeSubjectDesc.innerText = `Mata Pelajaran: ${configSubject} | ${configTopic}`;
+            questionText.innerText = activeQuestionObj.question;
+
+            if (selectedTeamMode === 1) {
+                activeTeamLabel.innerText = `Player | Soal ${qIdxInQueue + 1} / ${queue.length}`;
+            } else {
+                activeTeamLabel.innerText = `Giliran: Team ${currentTeamIndex + 1} (Soal ${qIdxInQueue + 1})`;
+            }
+
+            updateHUD();
+
+            // Start Timer
+            timeLeft = 25;
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.innerText = `${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleWrongAnswer("Waktu Habis!");
+                }
+            }, 1000);
+
+            generateTargetBoxes(activeQuestionObj.options);
+        }
+
+        function advanceToNextTeam() {
+            let loops = 0;
+            do {
+                currentTeamIndex = (currentTeamIndex + 1) % selectedTeamMode;
+                loops++;
+                if (loops > selectedTeamMode * 2) break;
+            } while (teamLives[currentTeamIndex] <= 0 || teamCurrentQueueIndices[currentTeamIndex] >= teamQuestionQueues[currentTeamIndex].length);
+        }
+
+        function generateTargetBoxes(options) {
+            targetBoxes = [];
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+
+            const boxWidth = Math.min(260, canvasWidth * 0.22);
+            const boxHeight = 100;
+            const totalWidth = options.length * boxWidth + (options.length - 1) * 20;
+            let startX = (canvasWidth - totalWidth) / 2;
+            if (startX < 30) startX = 30;
+
+            const yPos = canvasHeight - 200;
+
+            options.forEach((optText, index) => {
+                const x = startX + index * (boxWidth + 20);
+                const y = yPos;
+
+                targetBoxes.push({
+                    id: index,
+                    text: optText,
+                    x: x,
+                    y: y,
+                    width: boxWidth,
+                    height: boxHeight,
+                    color: ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981'][index % 4],
+                    hitAnimation: 0
+                });
+            });
+        }
+
+        function updateHUD() {
+            // Update Score & Active Team display
+            const currentScore = teamScores[currentTeamIndex];
+            scoreDisplay.innerText = `Skor: ${currentScore}`;
+
+            // Update hearts for current team
+            let livesCount = teamLives[currentTeamIndex];
+            let heartsHtml = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < livesCount) {
+                    heartsHtml += '<span class="text-rose-500 text-lg">❤️</span>';
+                } else {
+                    heartsHtml += '<span class="text-slate-600 text-lg">🖤</span>';
+                }
+            }
+            livesContainer.innerHTML = heartsHtml;
+        }
+
+        function triggerShoot() {
+            playSound('shoot');
+
+            let hitIndex = -1;
+            for (let i = 0; i < targetBoxes.length; i++) {
+                const box = targetBoxes[i];
+                if (pointerX >= box.x && pointerX <= box.x + box.width &&
+                    pointerY >= box.y && pointerY <= box.y + box.height) {
+                    hitIndex = i;
+                    break;
+                }
+            }
+
+            if (hitIndex !== -1) {
+                clearInterval(timerInterval);
+                targetBoxes[hitIndex].hitAnimation = 20;
+
+                if (hitIndex === activeQuestionObj.correct) {
+                    playSound('correct');
+                    teamScores[currentTeamIndex] += 100;
+                    updateHUD();
+
+                    setTimeout(() => {
+                        teamCurrentQueueIndices[currentTeamIndex]++;
+                        advanceToNextTeam();
+                        loadCurrentTurnQuestion();
+                    }, 600);
+                } else {
+                    playSound('wrong');
+                    handleWrongAnswer("Jawaban Salah!");
+                }
+            }
+        }
+
+        function handleWrongAnswer(msg) {
+            teamLives[currentTeamIndex]--;
+            updateHUD();
+
+            setTimeout(() => {
+                teamCurrentQueueIndices[currentTeamIndex]++;
+                advanceToNextTeam();
+                loadCurrentTurnQuestion();
+            }, 800);
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(timerInterval);
+            camera.stop();
+
+            const gameOverEmoji = document.getElementById('gameOverEmoji');
+            const gameOverTitle = document.getElementById('gameOverTitle');
+            const gameOverSubtitle = document.getElementById('gameOverSubtitle');
+            const scoreBoardResults = document.getElementById('scoreBoardResults');
+
+            gameOverEmoji.innerText = "🏆";
+            gameOverTitle.innerText = "Permainan Selesai!";
+            gameOverSubtitle.innerText = selectedTeamMode === 1 ? "Hebat! Kamu telah menyelesaikan seluruh soal." : "Semua giliran tim telah selesai dimainkan.";
+
+            let resultsHtml = '';
+            for (let i = 0; i < selectedTeamMode; i++) {
+                resultsHtml += `
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/60">
+                        <span class="font-bold text-sm text-slate-200">${selectedTeamMode === 1 ? 'Player' : 'Team ' + (i + 1)}</span>
+                        <span class="font-black text-emerald-400 text-sm">${teamScores[i]} Poin</span>
+                    </div>
+                `;
+            }
+            scoreBoardResults.innerHTML = resultsHtml;
+            gameOverModal.classList.remove('hidden');
+        }
+
+        // --- ADMIN PANEL LOGIC ---
+        function openAdminLoginModal() {
+            document.getElementById('adminPasswordInput').value = '';
+            document.getElementById('adminLoginError').classList.add('hidden');
+            document.getElementById('adminLoginModal').classList.remove('hidden');
+        }
+
+        function closeAdminLoginModal() {
+            document.getElementById('adminLoginModal').classList.add('hidden');
+        }
+
+        function verifyAdminPassword() {
+            const pass = document.getElementById('adminPasswordInput').value;
+            if (pass === "12345") {
+                closeAdminLoginModal();
+                openAdminDashboard();
+            } else {
+                document.getElementById('adminLoginError').classList.remove('hidden');
+            }
+        }
+
+        function openAdminDashboard() {
+            document.getElementById('adminSubject').value = configSubject;
+            document.getElementById('adminTopic').value = configTopic;
+            
+            renderAdminQuestions();
+            document.getElementById('adminModal').classList.remove('hidden');
+        }
+
+        function closeAdminModal() {
+            document.getElementById('adminModal').classList.add('hidden');
+        }
+
+        function renderAdminQuestions() {
+            const container = document.getElementById('adminQuestionsContainer');
+            container.innerHTML = '';
+
+            questions.forEach((q, idx) => {
+                let optionsHtml = '';
+                q.options.forEach((opt, oIdx) => {
+                    optionsHtml += `
+                        <div class="flex items-center space-x-2 mt-1">
+                            <input type="radio" name="correct_${idx}" value="${oIdx}" ${q.correct === oIdx ? 'checked' : ''} title="Tandai sebagai benar">
+                            <input type="text" value="${opt}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white opt-input-${idx}" data-opt-idx="${oIdx}">
+                        </div>
+                    `;
+                });
+
+                const item = document.createElement('div');
+                item.className = "bg-slate-800/80 border border-slate-700 p-3.5 rounded-2xl space-y-2";
+                item.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-blue-400">Soal #${idx + 1}</span>
+                        <button onclick="removeAdminQuestion(${idx})" class="text-rose-400 hover:text-rose-300 text-xs font-bold">Hapus</button>
+                    </div>
+                    <input type="text" value="${q.question}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white q-text-input" data-q-idx="${idx}">
+                    <div class="space-y-1">
+                        <span class="text-[11px] text-slate-400">Pilihan Jawaban (Pilih radio button untuk kunci jawaban benar):</span>
+                        ${optionsHtml}
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function addAdminQuestionItem() {
+            questions.push({
+                question: "Pertanyaan baru...",
+                options: ["Pilihan A", "Pilihan B", "Pilihan C", "Pilihan D"],
+                correct: 0
+            });
+            renderAdminQuestions();
+        }
+
+        function removeAdminQuestion(idx) {
+            if (questions.length <= 1) {
+                return;
+            }
+            questions.splice(idx, 1);
+            renderAdminQuestions();
+        }
+
+        function saveAdminSettings() {
+            configSubject = document.getElementById('adminSubject').value || "English";
+            configTopic = document.getElementById('adminTopic').value || "Materi Pembelajaran";
+
+            // Gather inputs
+            const qTexts = document.querySelectorAll('.q-text-input');
+            qTexts.forEach((qInput, qIdx) => {
+                questions[qIdx].question = qInput.value;
+                const optInputs = document.querySelectorAll(`.opt-input-${qIdx}`);
+                const options = [];
+                optInputs.forEach(optInput => {
+                    options.push(optInput.value);
+                });
+                questions[qIdx].options = options;
+
+                const radios = document.querySelectorAll(`input[name="correct_${qIdx}"]`);
+                radios.forEach((radio, rIdx) => {
+                    if (radio.checked) {
+                        questions[qIdx].correct = rIdx;
+                    }
+                });
+            });
+
+            closeAdminModal();
+            // Reset to home menu
+            guideModal.classList.remove('hidden');
+        }
+
+        // Render loop for smooth cursor & crosshair
+        function gameLoop() {
+            pointerX += (targetPointerX - pointerX) * lerpFactor;
+            pointerY += (targetPointerY - pointerY) * lerpFactor;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameActive) {
+                targetBoxes.forEach((box, idx) => {
+                    ctx.save();
+                    if (box.hitAnimation > 0) {
+                        box.hitAnimation--;
+                        ctx.fillStyle = '#ffffff';
+                    } else {
+                        ctx.fillStyle = box.color + 'cc';
+                    }
+
+                    const radius = 14;
+                    ctx.beginPath();
+                    ctx.roundRect(box.x, box.y, box.width, box.height, radius);
+                    ctx.fill();
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = box.color;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 14px Poppins, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    const letters = ['A', 'B', 'C', 'D'];
+                    ctx.fillText(`${letters[idx]}. ${box.text}`, box.x + box.width / 2, box.y + box.height / 2);
+
+                    ctx.restore();
+                });
+
+                // Crosshair
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(pointerX, pointerY, 20, 0, Math.PI * 2);
+                ctx.strokeStyle = isReadyState ? '#10b981' : '#f59e0b';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(pointerX, pointerY, 4, 0, Math.PI * 2);
+                ctx.fillStyle = isReadyState ? '#10b981' : '#f59e0b';
+                ctx.fill();
+                ctx.restore();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
